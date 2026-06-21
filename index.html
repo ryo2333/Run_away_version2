@@ -311,7 +311,7 @@ const STAGES = {
     surviveTime:120, bossDelay:0, midbossDelay:0,
     arenaRadius:560, darkness:0.35,
     early:['blueFlame','ramen','renkon'], mid:['ramen','renkon','ronen','shadowRider'], late:['ramen','ronen','shielder','bicycle','renkon'],
-    spawnStart:0.7, spawnMin:0.22, ramp:60, dmgMul:1.0,
+    spawnStart:0.83, spawnMin:0.22, ramp:60, dmgMul:1.0,
   },
   4: {
     nameJP:'幽鬼の蛇', nameEN:'The Wraith Serpent',
@@ -437,7 +437,7 @@ const STAGES = {
   16: {
     nameJP:'二人の護衛', nameEN:'Two to Protect',
     desc:'迷い犬と後輩、同時に守る試練の夜。', descEN:'Dog and junior at once. A trial of protection.',
-    chapter:2, mode:'escort', wardType:'girl', wardHp:120,
+    chapter:2, mode:'escort', wardType:'girl', wardHp:12000,
     stars:4, boss:null, midboss:null,
     surviveTime:120, bossDelay:0, midbossDelay:0,
     arenaRadius:560, darkness:0.6,
@@ -447,7 +447,7 @@ const STAGES = {
   17: {
     nameJP:'要人警護', nameEN:'VIP Detail',
     desc:'夜の式典に現れた要人。SPとして守り抜け。', descEN:'A VIP at the night ceremony. Stand as their guard.',
-    chapter:2, mode:'escort', wardType:'vip', wardHp:130,
+    chapter:2, mode:'escort', wardType:'vip', wardHp:13000,
     stars:4, boss:null, midboss:null,
     surviveTime:125, bossDelay:0, midbossDelay:0,
     arenaRadius:570, darkness:0.64,
@@ -457,7 +457,7 @@ const STAGES = {
   18: {
     nameJP:'再びの大蛙', nameEN:'The Toad Returns',
     desc:'池の主、再臨。守る者を抱えて挑め。', descEN:'The pond lord returns. Fight while you protect.',
-    chapter:2, mode:'escort', wardType:'prof', wardHp:140,
+    chapter:2, mode:'escort', wardType:'prof', wardHp:14000,
     stars:5, isBoss:true,
     boss:null, midboss:'greatToad',
     surviveTime:220, bossDelay:0, midbossDelay:25,
@@ -468,7 +468,7 @@ const STAGES = {
   19: {
     nameJP:'嵐の前の護り', nameEN:'Guard Before the Storm',
     desc:'あらゆる怪異が守る者を狙う。最後の試練。', descEN:'Every spirit hunts your ward. The final trial.',
-    chapter:2, mode:'escort', wardType:'vip', wardHp:130,
+    chapter:2, mode:'escort', wardType:'vip', wardHp:13000,
     stars:5, boss:null, midboss:null,
     surviveTime:130, bossDelay:0, midbossDelay:0,
     arenaRadius:600, darkness:0.74,
@@ -478,7 +478,7 @@ const STAGES = {
   20: {
     nameJP:'闇の研究者', nameEN:'The Dark Researcher',
     desc:'松見池の最奥。すべての元凶を、守りながら討て。2章完結。', descEN:'Depths of Matsumi. Defeat the source while protecting. Chapter 2 finale.',
-    chapter:2, mode:'escort', wardType:'girl', wardHp:140,
+    chapter:2, mode:'escort', wardType:'girl', wardHp:14000,
     stars:5, isBoss:true, isBigBoss:true,
     boss:'darkResearcher', midboss:'greatToad',
     surviveTime:280, bossDelay:60, midbossDelay:22,
@@ -2868,5 +2868,783 @@ document.getElementById('dawn-title-btn').onclick=toTitle;
 renderStages();
 refreshTitleRank();
 </script>
+
+<!-- ===== Tsukuba Yakou add-on patch v1 : paste this ENTIRE block right AFTER the final </script> in your file (just before </body>) ===== -->
+<script>
+/* ============================================================
+   筑波夜行 ・ 追加パッチ (v1)
+   このブロックは元コードの一番下、 </script> の直前に貼り付けるだけ。
+   元のコードは一切書き換えません(1〜13ステージの調整もそのまま)。
+   既存のグローバル関数を上書きして機能を足しています。
+   ============================================================ */
+(function(){
+'use strict';
+if (window.__TY_PATCH_V1__) return;
+window.__TY_PATCH_V1__ = true;
+
+/* ---------- 言語 ---------- */
+let LANG = lsGet('ty_lang') || 'ja';
+const isEN = () => LANG === 'en';
+function setLang(l){ LANG = l; lsSet('ty_lang', l); applyStaticLang(); try{ renderStages(); }catch(e){} }
+
+// 画面上の固定テキスト(HTMLに直書きされている分)の対訳
+const STR = {
+  subtitle:   {ja:'百鬼夜行サバイバー', en:'NIGHT PARADE SURVIVOR'},
+  selectStage:{ja:'ステージを選べ',     en:'SELECT A STAGE'},
+  chooseOne:  {ja:'一つを選べ',          en:'CHOOSE ONE'},
+  lvUp:       {ja:'霊力上昇',            en:'POWER RISES'},
+  retry:      {ja:'そのまま再挑戦',      en:'RETRY AS-IS'},
+  giveUp:     {ja:'諦める',              en:'GIVE UP'},
+  next:       {ja:'次のステージへ',      en:'NEXT STAGE'},
+  again:      {ja:'もう一度',            en:'PLAY AGAIN'},
+  toSelect:   {ja:'ステージ選択',        en:'STAGE SELECT'},
+  record:     {ja:'記録する',            en:'SUBMIT'},
+  dawnSub:    {ja:'——されど魂は朽ちず',  en:'—Yet the soul endures'},
+  killsLbl:   {ja:'鎮めた怪異',          en:'Spirits Quelled'},
+  deathsLbl:  {ja:'死亡数',              en:'Deaths'},
+  levelLbl:   {ja:'到達レベル',          en:'Level Reached'},
+  timeLbl:    {ja:'クリアタイム',        en:'Clear Time'},
+  curDeaths:  {ja:'現在の死亡数',        en:'Deaths So Far'},
+  elapsed:    {ja:'経過時間',            en:'Elapsed'},
+  ch1:        {ja:'第一章 一の矢',        en:'CH.1 Ichinoya'},
+  ch2:        {ja:'第二章 松見池',        en:'CH.2 Matsumi Pond'},
+  cont:       {ja:'▶ つづける',          en:'▶ CONTINUE'},
+  toFinal:    {ja:'▶ 最終決戦へ',        en:'▶ TO THE FINAL BATTLE'},
+};
+function T(k){ const o = STR[k]; return o ? (isEN()?o.en:o.ja) : k; }
+
+function setText(sel, k){ const el = document.querySelector(sel); if(el) el.textContent = T(k); }
+function applyStaticLang(){
+  setText('#title-overlay .overlay-subtitle','subtitle');
+  setText('#title-overlay .overlay-stage','selectStage');
+  setText('#levelup .lv-title','lvUp');
+  setText('#levelup .lv-sub','chooseOne');
+  const m = {
+    'retry-btn':'retry','give-up-btn':'giveUp',
+    'dawn-next-btn':'next','dawn-replay-btn':'again','dawn-title-btn':'toSelect',
+    'submit-rank-btn':'record',
+  };
+  for(const id in m){ const el=document.getElementById(id); if(el) el.textContent=T(m[id]); }
+  // dawn のラベル類
+  const dl = document.querySelectorAll('#dawn-overlay .stat-label');
+  if(dl[0]) dl[0].textContent=T('killsLbl');
+  if(dl[1]) dl[1].textContent=T('deathsLbl');
+  if(dl[2]) dl[2].textContent=T('levelLbl');
+  if(dl[3]) dl[3].textContent=T('timeLbl');
+  const sub=document.querySelector('#dawn-overlay .overlay-subtitle'); // 動的に上書きされるので初期だけ
+  const lng=document.querySelector('#lang-toggle'); if(lng) lng.textContent = isEN()?'日本語':'ENGLISH';
+}
+
+// 言語トグルボタン(タイトル右上)
+function makeLangToggle(){
+  if(document.getElementById('lang-toggle')) return;
+  const b=document.createElement('div');
+  b.id='lang-toggle';
+  b.textContent = isEN()?'日本語':'ENGLISH';
+  b.style.cssText='position:absolute;top:calc(.7rem + env(safe-area-inset-top));right:.8rem;z-index:120;'
+    +'font-family:Cinzel,serif;font-size:.7rem;letter-spacing:.2em;color:#d4c98a;border:1px solid #d4c98a;'
+    +'padding:.4rem .8rem;background:rgba(8,9,13,.7);cursor:pointer;border-radius:2px;';
+  b.onclick=()=>setLang(isEN()?'ja':'en');
+  const t=document.getElementById('title-overlay'); if(t) t.appendChild(b);
+}
+
+/* ---------- レベルアップ修正(札3枚なら「札の数」を出さない) ---------- */
+// UPGの英語対訳(レベルアップカード用)
+const UPG_EN = {
+  td:['Talisman Power','Talisman damage +30%'], tc:['Extra Talisman','+1 talisman in flight (max 3)'],
+  ts:['Talisman Speed','Attack speed +25%'], ms:['Swiftness','Move speed +18%'],
+  hp:['Vitality','Max HP +20 ・ full heal'], pk:['Attraction','Soul pickup range +30%'],
+  cr:['Focus','Crit chance +12%'], bell:['Kagura Bell','[NEW] knock back nearby foes'],
+  bellL:['Bell+','Bell power & range +30%'], book:['Textbook Throw','[NEW] piercing shot'],
+  bookL:['Textbook+','Textbook damage +35%'], pen:['Lead Burst','[NEW] rapid tiny shots'],
+  penL:['Lead+','+2 lead shots'], oma:['Mt.Tsukuba Charm','[NEW] occasional shield'],
+};
+function uName(k){ return isEN()&&UPG_EN[k]?UPG_EN[k][0]:UPG[k].n; }
+function uDesc(k){ return isEN()&&UPG_EN[k]?UPG_EN[k][1]:UPG[k].d; }
+
+window.showLevelUp = function(){
+  STATE.levelingUp = true;
+  const p = STATE.player;
+  const keys = ['td','tc','ts','ms','hp','pk','cr'];
+  if(!STATE.weapons.bell) keys.push('bell'); else keys.push('bellL');
+  if(!STATE.weapons.book) keys.push('book'); else keys.push('bookL');
+  if(!STATE.weapons.pen)  keys.push('pen');  else keys.push('penL');
+  if(!STATE.weapons.oma)  keys.push('oma');
+  const valid = keys.filter(k=>{
+    if((STATE.upgrades[k]||0) >= UPG[k].max) return false;
+    if(k==='tc' && p && p.tCount >= 3) return false; // ★ 既に3枚なら除外(ゴールドで増えた場合も)
+    return true;
+  });
+  const picks = [], copy = [...valid];
+  for(let i=0;i<3 && copy.length>0;i++){
+    if(Math.random() < GOLD_CHANCE){ picks.push('__GOLD__'); }
+    else { picks.push(copy.splice(Math.floor(Math.random()*copy.length),1)[0]); }
+  }
+  const c = document.getElementById('upgrade-options');
+  c.innerHTML = '';
+  for(const k of picks){
+    const card = document.createElement('div');
+    if(k === '__GOLD__'){
+      card.className = 'upgrade-card gold-card';
+      const gn = isEN()?'★ Golden Revelation ★':'★ 黄金の天啓 ★';
+      const gd = isEN()?'All abilities rise one tier (ultra rare)':'全ての能力が一段階上昇する(超激レア)';
+      card.innerHTML = '<div class="u-icon">'+goldIcon()+'</div><div class="u-text"><div class="u-name" style="color:#ffe080">'+gn+'</div><div class="u-desc">'+gd+'</div></div><div class="u-tier" style="color:#ffd040">1/300</div>';
+      card.onclick = ()=>applyGold();
+      c.appendChild(card); continue;
+    }
+    const tier = (STATE.upgrades[k]||0)+1;
+    card.className = 'upgrade-card'+(UPG[k].isNew?' new':'');
+    card.innerHTML = '<div class="u-icon">'+icon(k)+'</div><div class="u-text"><div class="u-name">'+uName(k)+'</div><div class="u-desc">'+uDesc(k)+'</div></div><div class="u-tier">'+tier+'/'+UPG[k].max+'</div>';
+    card.onclick = ()=>applyUpg(k);
+    c.appendChild(card);
+  }
+  document.getElementById('levelup').classList.add('show');
+};
+
+/* ---------- 護衛対象を動かす(14ステージ以降) ---------- */
+// 円を描いて逃げ回る。ボス護衛(15/18/20)はゆっくり&小さめにして理不尽さを避ける。
+[14,16,17,19].forEach(id=>{ if(STAGES[id]){ STAGES[id].wardMove='circle'; STAGES[id].wardOrbit=200; STAGES[id].wardSpeed=0.55; STAGES[id].wardDodge=true; } });
+[15,18,20].forEach(id=>{ if(STAGES[id]){ STAGES[id].wardMove='circle'; STAGES[id].wardOrbit=150; STAGES[id].wardSpeed=0.35; STAGES[id].wardDodge=false; } });
+
+function updateWardMotion(){
+  if(!STATE.running || STATE.levelingUp || PAUSED) return;
+  const st = STATE.stage, w = STATE.ward;
+  if(!w || w.hp<=0 || !st || st.wardMove!=='circle') return;
+  const R = st.wardOrbit||190, sp = st.wardSpeed||0.5;
+  let x = Math.cos(STATE.time*sp)*R;
+  let y = Math.sin(STATE.time*sp)*R;
+  // 近い敵から軽く逃げる(自分で避ける感じ)
+  if(st.wardDodge){
+    let nx=0,ny=0,best=1e9;
+    for(const e of STATE.enemies){
+      const dx=w.x-e.x, dy=w.y-e.y, d=Math.hypot(dx,dy);
+      if(d<best){ best=d; if(d>0.01){ nx=dx/d; ny=dy/d; } }
+    }
+    if(best<90){ x += nx*28; y += ny*28; }
+  }
+  // 急に飛ばないよう補間
+  w.x += (x - w.x)*Math.min(1, 6*0.016);
+  w.y += (y - w.y)*Math.min(1, 6*0.016);
+}
+
+/* ---------- 新キャラ: 天狗(17ステージ〜) ---------- */
+ENEMIES.tengu = { nameJP:'天狗', nameEN:'Tengu', hp:50, speed:60, dmg:30, radius:16, xp:3,
+  color:'#b03020', glow:'rgba(200,70,40,0.5)', shape:'tengu', lunger:true };
+SPAWN_CAP.tengu = 2; // 待ち伏せ突進持ちなので同時2体まで
+[17,18,19,20].forEach(id=>{
+  if(STAGES[id]){
+    if(STAGES[id].mid && !STAGES[id].mid.includes('tengu')) STAGES[id].mid.push('tengu');
+    if(STAGES[id].late && !STAGES[id].late.includes('tengu')) STAGES[id].late.push('tengu');
+  }
+});
+
+/* ---------- カエルの再登場を「火焔龍」に差し替え(18ステージ) ---------- */
+ENEMIES.fireDragon = { nameJP:'火焔龍', nameEN:'The Flame Dragon', hp:1000, speed:66, dmg:140,
+  radius:34, xp:45, color:'#6a1212', glow:'rgba(210,70,30,0.55)', shape:'dragon',
+  boss:true, shoots:true, shootKind:'soup' };
+if(STAGES[18]){
+  STAGES[18].midboss = 'fireDragon';
+  STAGES[18].nameJP = '火焔龍、現る';
+  STAGES[18].nameEN = 'The Flame Dragon Appears';
+  STAGES[18].desc   = 'うねる龍が炎を吐く。守る者を抱えて挑め。';
+  STAGES[18].descEN = 'A serpentine dragon breathes fire. Fight while you protect.';
+}
+
+/* ---------- 敵の見た目: drawEnemyを差し替えて新形状を追加 ---------- */
+window.drawEnemy = function(e){
+  ctx.save(); ctx.translate(e.x, e.y);
+  const fl = e.hitFlash > 0;
+  const w = Math.sin(e.wobble)*1.5;
+  const gR = e.radius + (e.boss?26:16);
+  const g = ctx.createRadialGradient(0,0,0,0,0,gR);
+  g.addColorStop(0, e.glow);
+  g.addColorStop(0.6, e.glow.replace(/[\d.]+\)/,'0.15)'));
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(-gR,-gR,gR*2,gR*2);
+  switch(e.shape){
+    case 'blueFlame':aBlue(e,fl,w);break;
+    case 'splitter':aSplit(e,fl,w);break;
+    case 'gaunt':aGaunt(e,fl,w);break;
+    case 'rider':aRider(e,fl,w);break;
+    case 'shielder':aShield(e,fl,w);break;
+    case 'renkon':aRenkon(e,fl,w);break;
+    case 'melon':aMelon(e,fl,w);break;
+    case 'ramen':aRamen(e,fl,w);break;
+    case 'bicycle':aBike(e,fl,w);break;
+    case 'ronen':aRonen(e,fl,w);break;
+    case 'mantis':aMantis(e,fl,w);break;
+    case 'ebisu':aEbisu(e,fl,w);break;
+    case 'hopper':aHopper(e,fl,w);break;
+    case 'lanternGhost':aLanternG(e,fl,w);break;
+    case 'centipede':aCentipede(e,fl,w);break;
+    case 'serpent':aSerp(e,fl,w);break;
+    case 'toad':aToad(e,fl,w);break;
+    case 'lost':aLost(e,fl,w);break;
+    case 'researcher':aResearcher(e,fl,w);break;
+    case 'reaper':aReap(e,fl,w);break;
+    case 'tengu':aTengu(e,fl,w);break;
+    case 'dragon':aDragon(e,fl,w);break;
+  }
+  ctx.restore();
+};
+
+function aTengu(e,fl,w){
+  const r=e.radius, lunging=e.lungeState==='lunge';
+  ctx.fillStyle='rgba(0,0,0,0.4)';
+  ctx.beginPath();ctx.ellipse(0,r*0.8,r*0.7,r*0.2,0,0,6.28);ctx.fill();
+  // 黒い翼(突進中は広げる)
+  const wing=lunging?1.3:0.9;
+  ctx.fillStyle=fl?'#fff':'#1a1014';
+  for(const s of [-1,1]){
+    ctx.beginPath();
+    ctx.moveTo(s*r*0.3,-r*0.1);
+    ctx.quadraticCurveTo(s*r*1.4*wing,-r*0.6,s*r*1.2*wing,r*0.4);
+    ctx.quadraticCurveTo(s*r*0.7,r*0.1,s*r*0.3,r*0.2);
+    ctx.closePath();ctx.fill();
+  }
+  // 山伏装束の体
+  ctx.fillStyle=fl?'#fff':'#3a2018';
+  ctx.beginPath();ctx.moveTo(-r*0.5,r*0.8);ctx.lineTo(-r*0.4,-r*0.2);ctx.lineTo(r*0.4,-r*0.2);ctx.lineTo(r*0.5,r*0.8);ctx.closePath();ctx.fill();
+  // 赤い顔
+  const fg=ctx.createRadialGradient(-r*0.15,-r*0.55,2,0,-r*0.45,r*0.5);
+  fg.addColorStop(0,fl?'#fff':'#d85040'); fg.addColorStop(1,fl?'#fff':'#a02818');
+  ctx.fillStyle=fg;
+  ctx.beginPath();ctx.arc(0,-r*0.45,r*0.42,0,6.28);ctx.fill();
+  // 長い鼻
+  ctx.fillStyle=fl?'#fff':'#c03828';
+  ctx.beginPath();ctx.moveTo(-r*0.12,-r*0.45);ctx.lineTo(-r*0.06,-r*0.4);ctx.lineTo(0,-r*0.05);ctx.lineTo(r*0.06,-r*0.4);ctx.lineTo(r*0.12,-r*0.45);ctx.closePath();ctx.fill();
+  // 頭巾(兜巾)
+  ctx.fillStyle=fl?'#fff':'#2a1810';
+  ctx.beginPath();ctx.arc(0,-r*0.6,r*0.4,Math.PI,0);ctx.fill();
+  ctx.fillStyle='#c9a04a'; ctx.fillRect(-r*0.08,-r*0.85,r*0.16,r*0.16);
+  // 怒り目
+  ctx.fillStyle=lunging?'#fff060':'#f5e8c0';
+  ctx.shadowColor=lunging?'#ffd000':'#000'; ctx.shadowBlur=lunging?8:0;
+  ctx.beginPath();ctx.arc(-r*0.2,-r*0.5,r*0.1,0,6.28);ctx.fill();
+  ctx.beginPath();ctx.arc(r*0.2,-r*0.5,r*0.1,0,6.28);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#1a0a0a';
+  ctx.beginPath();ctx.arc(-r*0.2,-r*0.5,r*0.04,0,6.28);ctx.fill();
+  ctx.beginPath();ctx.arc(r*0.2,-r*0.5,r*0.04,0,6.28);ctx.fill();
+  // 羽団扇
+  ctx.save();ctx.translate(r*0.55,r*0.2);ctx.rotate(lunging?-0.6:0.3);
+  ctx.fillStyle=fl?'#fff':'#2a5a28';
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-r*0.25,-r*0.4);ctx.lineTo(r*0.25,-r*0.4);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+function aDragon(e,fl,w){
+  const r=e.radius;
+  // うねる胴体(独自トレイルで表現)
+  e.dragTrail = e.dragTrail || [];
+  e.dragTrail.unshift({x:e.x, y:e.y}); if(e.dragTrail.length>16) e.dragTrail.length=16;
+  for(let i=e.dragTrail.length-1;i>=1;i--){
+    const s=e.dragTrail[i];
+    const ox=s.x-e.x, oy=s.y-e.y;
+    const wob=Math.sin(e.wobble*1.5 - i*0.6)*i*1.4; // くねり
+    const sr=r*(0.92 - i*0.045);
+    ctx.fillStyle = fl?'#fff':(i%2===0?'#3a1010':'#5a1814');
+    ctx.beginPath();ctx.arc(ox, oy+wob, Math.max(3,sr), 0, 6.28);ctx.fill();
+    // 背びれ
+    if(i%2===0 && sr>5){
+      ctx.fillStyle='#c0402a';
+      ctx.beginPath();ctx.moveTo(ox, oy+wob-sr);ctx.lineTo(ox-3, oy+wob-sr-5);ctx.lineTo(ox+3, oy+wob-sr-5);ctx.closePath();ctx.fill();
+    }
+  }
+  // 炎のブレス(口先・進行方向)
+  const ang=Math.atan2(STATE.player?STATE.player.y-e.y:0, STATE.player?STATE.player.x-e.x:1);
+  ctx.save();ctx.rotate(ang);
+  const flick=0.7+Math.sin(performance.now()/80)*0.3;
+  const fgrad=ctx.createRadialGradient(r*0.8,0,0,r*2.0,0,r*1.6);
+  fgrad.addColorStop(0,`rgba(255,230,120,${0.8*flick})`);
+  fgrad.addColorStop(0.4,`rgba(255,140,40,${0.6*flick})`);
+  fgrad.addColorStop(1,'rgba(200,40,10,0)');
+  ctx.fillStyle=fgrad;
+  ctx.beginPath();ctx.moveTo(r*0.6,0);ctx.arc(r*0.6,0,r*1.5,-0.5,0.5);ctx.closePath();ctx.fill();
+  ctx.restore();
+  // 頭
+  ctx.fillStyle=fl?'#fff':'#6a1c14';
+  ctx.beginPath();ctx.arc(0,0,r,0,6.28);ctx.fill();
+  // 角
+  ctx.strokeStyle=fl?'#fff':'#d8c090';ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(-r*0.4,-r*0.7);ctx.lineTo(-r*0.7,-r*1.2);ctx.moveTo(r*0.4,-r*0.7);ctx.lineTo(r*0.7,-r*1.2);ctx.stroke();
+  // 牙の口
+  ctx.fillStyle='#1a0808';
+  ctx.beginPath();ctx.ellipse(r*0.5,r*0.15,r*0.4,r*0.25,ang*0+0.2,0,6.28);ctx.fill();
+  // 目(金)
+  ctx.fillStyle='#ffd040';
+  ctx.shadowColor='#ff8000';ctx.shadowBlur=14;
+  ctx.beginPath();ctx.arc(-r*0.25,-r*0.2,r*0.16,0,6.28);ctx.fill();
+  ctx.beginPath();ctx.arc(r*0.25,-r*0.2,r*0.16,0,6.28);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#1a0808';
+  ctx.fillRect(-r*0.25-1.5,-r*0.32,3,r*0.24);
+  ctx.fillRect(r*0.25-1.5,-r*0.32,3,r*0.24);
+  // ヒゲ
+  ctx.strokeStyle='#d8c090';ctx.lineWidth=1.5;
+  for(const s of [-1,1]){
+    ctx.beginPath();ctx.moveTo(s*r*0.4,r*0.3);
+    ctx.quadraticCurveTo(s*r*1.0,r*0.4+Math.sin(e.wobble*3)*4,s*r*1.3,r*0.1);ctx.stroke();
+  }
+  bossHP(e);
+}
+
+/* ---------- 直近に救った後輩(12)を記録 ---------- */
+const _markCleared = markCleared;
+window.markCleared = function(id){
+  _markCleared(id);
+  if(id===12){ lsSet('ty_junior', String(Math.floor(Math.random()*5))); }
+};
+function juniorIndex(){
+  const v = lsGet('ty_junior'); if(v===null||v===undefined) return 0;
+  const n = parseInt(v,10); return isNaN(n)?0:Math.max(0,Math.min(4,n));
+}
+
+/* ---------- 立ち絵(プレースホルダ。後で実画像URLに差し替え可) ----------
+   ★ 自分でAI生成した画像を使うときは PORTRAITS にURLを入れてください:
+     PORTRAITS.junior[0] = 'img/junior0.png'; ... PORTRAITS.prof = 'img/prof.png';
+   URLが入っていればその画像を、なければ下のキャンバス絵を表示します。 */
+const PORTRAITS = { junior:[null,null,null,null,null], prof:null };
+// 5人ぶんの色違い(肌・髪・瞳)。あくまで様式化したプレースホルダ。
+const JUNIOR_LOOK = [
+  {skin:'#f2d6c0', hair:'#3a2a1c', eye:'#5a3a28', name:'AYA'},
+  {skin:'#e7b58e', hair:'#1a1410', eye:'#2a1c14', name:'MEI'},
+  {skin:'#8a5a3c', hair:'#120d0a', eye:'#3a241a', name:'ZARA'},
+  {skin:'#f6e0cf', hair:'#caa84a', eye:'#3a6a8a', name:'EMMA'},
+  {skin:'#d8a878', hair:'#2a1810', eye:'#241a12', name:'NINA'},
+];
+function drawJuniorFace(g, S, idx){
+  const L = JUNIOR_LOOK[idx] || JUNIOR_LOOK[0];
+  const cx=S*0.5, cy=S*0.54, R=S*0.34;
+  // 髪(後ろ)
+  g.fillStyle=L.hair; g.beginPath();g.arc(cx,cy-R*0.2,R*1.25,Math.PI*0.85,Math.PI*0.15);g.fill();
+  g.fillRect(cx-R*1.1,cy-R*0.2,R*0.5,R*1.8); g.fillRect(cx+R*0.6,cy-R*0.2,R*0.5,R*1.8);
+  // 首・肩(セーラー)
+  g.fillStyle='#2a3a5a'; g.fillRect(cx-R*0.9,cy+R*0.7,R*1.8,R*1.2);
+  g.fillStyle='#dde6f0'; g.beginPath();g.moveTo(cx-R*0.7,cy+R*0.75);g.lineTo(cx,cy+R*1.3);g.lineTo(cx+R*0.7,cy+R*0.75);g.closePath();g.fill();
+  g.fillStyle='#c93030'; g.beginPath();g.arc(cx,cy+R*0.95,R*0.12,0,6.28);g.fill();
+  // 顔
+  g.fillStyle=L.skin; g.beginPath();g.arc(cx,cy,R,0,6.28);g.fill();
+  g.beginPath();g.ellipse(cx,cy+R*0.45,R*0.62,R*0.5,0,0,6.28);g.fill();
+  // 前髪
+  g.fillStyle=L.hair;
+  g.beginPath();g.moveTo(cx-R,cy-R*0.1);g.quadraticCurveTo(cx,cy-R*1.25,cx+R,cy-R*0.1);
+  g.quadraticCurveTo(cx+R*0.4,cy-R*0.5,cx+R*0.1,cy-R*0.15);
+  g.quadraticCurveTo(cx,cy-R*0.45,cx-R*0.15,cy-R*0.15);
+  g.quadraticCurveTo(cx-R*0.4,cy-R*0.5,cx-R,cy-R*0.1);g.closePath();g.fill();
+  // 目
+  for(const s of [-1,1]){
+    g.fillStyle='#fff'; g.beginPath();g.ellipse(cx+s*R*0.34,cy+R*0.12,R*0.2,R*0.16,0,0,6.28);g.fill();
+    g.fillStyle=L.eye; g.beginPath();g.arc(cx+s*R*0.34,cy+R*0.14,R*0.12,0,6.28);g.fill();
+    g.fillStyle='#0a0a0a'; g.beginPath();g.arc(cx+s*R*0.34,cy+R*0.14,R*0.06,0,6.28);g.fill();
+    g.fillStyle='#fff'; g.beginPath();g.arc(cx+s*R*0.34-R*0.04,cy+R*0.09,R*0.03,0,6.28);g.fill();
+    g.strokeStyle=L.hair;g.lineWidth=S*0.012;g.beginPath();g.arc(cx+s*R*0.34,cy+R*0.05,R*0.22,Math.PI*1.15,Math.PI*1.85);g.stroke();
+  }
+  // 鼻・口
+  g.strokeStyle='rgba(0,0,0,0.2)';g.lineWidth=S*0.008;
+  g.beginPath();g.moveTo(cx,cy+R*0.28);g.lineTo(cx-R*0.05,cy+R*0.38);g.stroke();
+  g.strokeStyle='#c0504a';g.lineWidth=S*0.012;
+  g.beginPath();g.arc(cx,cy+R*0.5,R*0.14,0.15*Math.PI,0.85*Math.PI);g.stroke();
+  // 頬の赤み
+  g.fillStyle='rgba(230,120,110,0.35)';
+  g.beginPath();g.arc(cx-R*0.45,cy+R*0.35,R*0.13,0,6.28);g.fill();
+  g.beginPath();g.arc(cx+R*0.45,cy+R*0.35,R*0.13,0,6.28);g.fill();
+}
+function drawProfFace(g, S){
+  const cx=S*0.5, cy=S*0.5, R=S*0.34;
+  // 暗いオーラ
+  const au=g.createRadialGradient(cx,cy,R*0.5,cx,cy,R*1.6);
+  au.addColorStop(0,'rgba(80,120,220,0.25)');au.addColorStop(1,'rgba(10,10,20,0)');
+  g.fillStyle=au;g.fillRect(0,0,S,S);
+  // 白衣の肩
+  g.fillStyle='#c8d2dc'; g.fillRect(cx-R*1.0,cy+R*0.7,R*2.0,R*1.4);
+  g.strokeStyle='#9aa6b4';g.lineWidth=S*0.01;g.beginPath();g.moveTo(cx,cy+R*0.7);g.lineTo(cx,cy+R*2);g.stroke();
+  // 顔(やつれた肌)
+  g.fillStyle='#cdbfae'; g.beginPath();g.arc(cx,cy,R,0,6.28);g.fill();
+  g.beginPath();g.ellipse(cx,cy+R*0.4,R*0.6,R*0.55,0,0,6.28);g.fill();
+  // 影
+  g.fillStyle='rgba(40,30,40,0.3)';
+  g.beginPath();g.ellipse(cx-R*0.3,cy+R*0.15,R*0.2,R*0.3,0,0,6.28);g.fill();
+  // 後退した白髪
+  g.fillStyle='#d8d8d8';
+  g.beginPath();g.arc(cx-R*0.7,cy-R*0.4,R*0.22,0,6.28);g.fill();
+  g.beginPath();g.arc(cx+R*0.7,cy-R*0.4,R*0.22,0,6.28);g.fill();
+  g.beginPath();g.moveTo(cx-R*0.9,cy-R*0.3);g.quadraticCurveTo(cx,cy-R*0.55,cx+R*0.9,cy-R*0.3);g.lineTo(cx+R*0.8,cy-R*0.5);g.quadraticCurveTo(cx,cy-R*0.85,cx-R*0.8,cy-R*0.5);g.closePath();g.fill();
+  // 不気味な笑みの眉
+  g.strokeStyle='#3a3030';g.lineWidth=S*0.018;
+  g.beginPath();g.moveTo(cx-R*0.55,cy-R*0.18);g.lineTo(cx-R*0.18,cy-R*0.05);g.stroke();
+  g.beginPath();g.moveTo(cx+R*0.55,cy-R*0.18);g.lineTo(cx+R*0.18,cy-R*0.05);g.stroke();
+  // 丸眼鏡(光る)
+  g.strokeStyle='#6bd0ff';g.lineWidth=S*0.016;g.shadowColor='#6bd0ff';g.shadowBlur=S*0.04;
+  g.beginPath();g.arc(cx-R*0.32,cy+R*0.05,R*0.2,0,6.28);g.stroke();
+  g.beginPath();g.arc(cx+R*0.32,cy+R*0.05,R*0.2,0,6.28);g.stroke();
+  g.beginPath();g.moveTo(cx-R*0.12,cy+R*0.05);g.lineTo(cx+R*0.12,cy+R*0.05);g.stroke();
+  g.shadowBlur=0;
+  // 不敵な口
+  g.strokeStyle='#5a2020';g.lineWidth=S*0.016;
+  g.beginPath();g.moveTo(cx-R*0.3,cy+R*0.55);g.quadraticCurveTo(cx,cy+R*0.4,cx+R*0.35,cy+R*0.6);g.stroke();
+}
+
+/* ---------- 会話システム ---------- */
+let PAUSED = false;
+function ensureDialogDOM(){
+  if(document.getElementById('cut-overlay')) return;
+  const st=document.createElement('style');
+  st.textContent = `
+  #cut-overlay{position:absolute;inset:0;z-index:200;display:none;flex-direction:column;justify-content:flex-end;
+    background:radial-gradient(ellipse at 50% 35%,rgba(80,40,120,.12),rgba(0,0,0,.92));padding-bottom:env(safe-area-inset-bottom)}
+  #cut-overlay.show{display:flex}
+  #cut-portrait{align-self:center;margin-bottom:.4rem;filter:drop-shadow(0 0 24px rgba(0,0,0,.8))}
+  #cut-box{margin:0 .8rem 1rem;border:1px solid rgba(216,209,188,.5);background:linear-gradient(180deg,rgba(8,9,13,.92),rgba(5,6,9,.96));
+    padding:1rem 1.2rem 1.1rem;min-height:120px;position:relative;cursor:pointer}
+  #cut-who{font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.3em;color:#d4c98a;margin-bottom:.5rem;text-shadow:0 0 8px rgba(212,201,138,.4)}
+  #cut-line{font-family:'Klee One',serif;font-size:1rem;line-height:1.8;color:#e8e0cc;min-height:3.4em}
+  #cut-tap{position:absolute;right:1rem;bottom:.6rem;font-size:.7rem;color:#888270;letter-spacing:.2em;animation:cutBlink 1s infinite}
+  @keyframes cutBlink{0%,100%{opacity:.3}50%{opacity:1}}
+  #cut-flash{position:absolute;inset:0;background:radial-gradient(circle,rgba(120,255,180,.55),rgba(120,255,180,0) 60%);opacity:0;pointer-events:none;z-index:201}
+  `;
+  document.head.appendChild(st);
+  const ov=document.createElement('div'); ov.id='cut-overlay';
+  const pc=document.createElement('canvas'); pc.id='cut-portrait'; pc.width=300; pc.height=300;
+  pc.style.width='150px'; pc.style.height='150px';
+  const box=document.createElement('div'); box.id='cut-box';
+  box.innerHTML='<div id="cut-who"></div><div id="cut-line"></div><div id="cut-tap">▼ TAP</div>';
+  const fl=document.createElement('div'); fl.id='cut-flash';
+  ov.appendChild(pc); ov.appendChild(box); ov.appendChild(fl);
+  document.getElementById('game').appendChild(ov);
+}
+function paintPortrait(kind, idx){
+  const pc=document.getElementById('cut-portrait'); if(!pc) return;
+  const g=pc.getContext('2d'); const S=pc.width; g.clearRect(0,0,S,S);
+  // 実画像URLが指定されていればそれを描画
+  let url=null;
+  if(kind==='junior') url=PORTRAITS.junior[idx];
+  if(kind==='prof') url=PORTRAITS.prof;
+  if(url){
+    const im=new Image(); im.onload=()=>{ g.clearRect(0,0,S,S); g.drawImage(im,0,0,S,S); };
+    im.src=url; return;
+  }
+  if(kind==='junior') drawJuniorFace(g,S,idx);
+  else if(kind==='prof') drawProfFace(g,S);
+  pc.style.display = kind?'block':'none';
+}
+// lines: [{who:{ja,en}, jp, en, portrait:'junior'|'prof'|null, juniorIdx, flash:true}]
+function runDialog(lines, onDone){
+  ensureDialogDOM();
+  PAUSED=true; STATE.running=false;
+  const ov=document.getElementById('cut-overlay');
+  const box=document.getElementById('cut-box');
+  // 毎回ボックスの中身を組み直す(ボタン表示で消えても復元される)
+  box.innerHTML='<div id="cut-who"></div><div id="cut-line"></div><div id="cut-tap">▼ TAP</div>';
+  const whoEl=document.getElementById('cut-who'), lineEl=document.getElementById('cut-line');
+  const flash=document.getElementById('cut-flash');
+  ov.classList.add('show');
+  let i=0;
+  function show(){
+    const L=lines[i];
+    whoEl.textContent = L.who ? (isEN()?L.who.en:L.who.ja) : '';
+    lineEl.textContent = isEN()?L.en:L.jp;
+    paintPortrait(L.portrait, L.juniorIdx||0);
+    if(L.flash){ flash.style.transition='none'; flash.style.opacity='0.9';
+      requestAnimationFrame(()=>{ flash.style.transition='opacity 1.2s ease'; flash.style.opacity='0'; }); }
+  }
+  function next(){
+    i++;
+    if(i>=lines.length){ ov.classList.remove('show'); box.onclick=null; PAUSED=false; if(onDone) onDone(); return; }
+    show();
+  }
+  box.onclick=next;
+  show();
+}
+// ボタン付きで終わる会話(最後にボタンを出してアクション)
+function runDialogThenButton(lines, btnKey, onClick){
+  runDialog(lines, ()=>{
+    const ov=document.getElementById('cut-overlay');
+    const box=document.getElementById('cut-box');
+    ov.classList.add('show'); PAUSED=true; STATE.running=false;
+    box.innerHTML='';
+    const b=document.createElement('button');
+    b.className='btn primary'; b.textContent=T(btnKey); b.style.width='100%';
+    b.onclick=()=>{ ov.classList.remove('show'); PAUSED=false; onClick(); };
+    box.appendChild(b);
+  });
+}
+
+/* ---------- 19.5 演出 + ステータス引き継ぎ + ラスボス(教授)演出 ---------- */
+let snapshotPlayer = null;   // 19クリア時のステータス(セッション限り)
+let profIntroShown = false;  // 20開始時の教授演出は最初の1回だけ
+
+function captureStats(p){
+  return { speed:p.speed, maxHp:p.maxHp, radius:p.radius, tDmg:p.tDmg, tCount:p.tCount, tSpd:p.tSpd,
+    atkInt:p.atkInt, pickupR:p.pickupR, crit:p.crit,
+    hasBell:p.hasBell, bellR:p.bellR, bellInt:p.bellInt, bellDmg:p.bellDmg,
+    hasBook:p.hasBook, bookInt:p.bookInt, bookDmg:p.bookDmg,
+    hasPencil:p.hasPencil, penInt:p.penInt, penCount:p.penCount, penDmg:p.penDmg,
+    hasOma:p.hasOma, omaInt:p.omaInt, omaDur:p.omaDur,
+    upgrades:Object.assign({},STATE.upgrades), weapons:Object.assign({},STATE.weapons) };
+}
+function applyStats(p,s){
+  for(const k in s){ if(k==='upgrades'||k==='weapons') continue; p[k]=s[k]; }
+  STATE.upgrades=Object.assign({},s.upgrades);
+  STATE.weapons=Object.assign({},s.weapons);
+  p.hp=p.maxHp;
+}
+
+// 19クリア → スナップショット撮影 → 通常のdawn表示
+const _triggerDawn = triggerDawn;
+window.triggerDawn = function(){
+  if(STATE.stageId===19 && STATE.player){ snapshotPlayer = captureStats(STATE.player); }
+  _triggerDawn();
+  if(STATE.stageId===20){ setStage20Ending(); }
+};
+
+// dawnの「次へ」: 19の後だけ19.5演出へ
+function hookDawnNext(){
+  const btn=document.getElementById('dawn-next-btn'); if(!btn) return;
+  btn.onclick=()=>{
+    if(STATE.stageId===19){ document.getElementById('dawn-overlay').classList.add('hidden'); playCutscene195(); return; }
+    const n=STATE.stageId+1; if(STAGES[n]) begin(n); else toTitle();
+  };
+}
+
+function playCutscene195(){
+  const idx=juniorIndex();
+  const who={ja:'後輩',en:'Junior'};
+  const lines=[
+    {who, jp:'先輩……! 無事だったんですね。', en:"Senpai...! You're safe.", portrait:'junior', juniorIdx:idx},
+    {who, jp:'これ、お水です。聖水……みたいなものなんです。', en:'Here — water. Holy water... well, something like it.', portrait:'junior', juniorIdx:idx},
+    {who, jp:'先輩、お水です。飲んで、回復してください。', en:'Senpai, please. Drink it and recover.', portrait:'junior', juniorIdx:idx},
+    {who:{ja:'',en:''}, jp:'(主人公はボトルを受け取り、一息に飲み干した)', en:'(You take the bottle and drink it down in one breath.)', portrait:'junior', juniorIdx:idx, flash:true},
+    {who:{ja:'',en:''}, jp:'——力がみなぎる。体が、軽い。', en:'—Strength surges. Your body feels light.', portrait:null},
+  ];
+  runDialogThenButton(lines, 'toFinal', ()=>{ begin(20); });
+}
+
+// startRun を差し替えて 20 だけステータス引き継ぎ + HP2倍 + 教授演出
+const _startRun = startRun;
+window.startRun = function(){
+  _startRun();
+  if(STATE.stageId===20){
+    if(snapshotPlayer && STATE.player){
+      applyStats(STATE.player, snapshotPlayer);
+      STATE.player.maxHp *= 2; STATE.player.hp = STATE.player.maxHp; // 体力2倍で最終戦へ
+    }
+    if(!profIntroShown){
+      profIntroShown = true;
+      const who={ja:'教授…?',en:'The Professor...?'};
+      const lines=[
+        {who, jp:'よく来たな。だが——この顔に、見覚えはないか?', en:"So you came. But—do you not recognize this face?", portrait:'prof'},
+        {who, jp:'そう。一の矢で君が“護った”あの教授だ。あの夜、私はまるで弱っていなかっただろう?', en:"Yes. The very professor you 'guarded' in Ichinoya. I was never weakened that night, was I?", portrait:'prof'},
+        {who:{ja:'闇の研究者',en:'The Dark Researcher'}, jp:'この実験で、私は世界を壊す。自らを最強のキメラに造り変えてな。', en:'With this experiment, I will break the world—remaking myself into the ultimate chimera.', portrait:'prof'},
+        {who:{ja:'闇の研究者',en:'The Dark Researcher'}, jp:'邪魔する者は……許さん——!', en:'Those who interfere... will NOT be forgiven—!', portrait:'prof', flash:true},
+      ];
+      // 戦闘を一旦止めて会話 → 終わったら再開
+      STATE.running=false; PAUSED=true;
+      runDialog(lines, ()=>{ PAUSED=false; STATE.running=true; });
+    }
+  }
+};
+
+// 20クリア時の締め(3章への引き)
+function setStage20Ending(){
+  const cliff=document.getElementById('cliffhanger'); if(!cliff) return;
+  if(isEN()){
+    cliff.innerHTML = 'The Dark Researcher shatters. Yet countless freed spirits now bare their fangs at the sleeping town.<br>—No. Wait. Was this truly the professor\'s doing?'
+      + '<span class="cliff-quote">"The seal... is broken. Ever since that night, on Mt. Tsukuba."</span>'
+      + '<span class="cliff-next">→ Chapter 3 ・ Mt. Tsukuba (in development)</span>';
+  } else {
+    cliff.innerHTML = '闇の研究者は砕け散った。だが、解き放たれた無数の妖怪が、眠る街へと牙を剥きはじめる。<br>——いや、待て。これは本当に、教授のせいだったのか?'
+      + '<span class="cliff-quote">「結界が……破れている。あの夜、筑波山で」</span>'
+      + '<span class="cliff-next">→ 第三章 ・ 筑波山(制作中)</span>';
+  }
+  cliff.style.display='block';
+}
+
+/* ---------- ステージ選択 / バナー の言語対応 ---------- */
+const _renderStages = renderStages;
+window.renderStages = function(){
+  _renderStages();
+  if(!isEN()) return;
+  // 章タブを英語に
+  const tabs=document.querySelectorAll('#chapter-tabs .chapter-tab');
+  if(tabs[0] && !tabs[0].classList.contains('locked')) tabs[0].textContent=T('ch1');
+  if(tabs[1] && !tabs[1].classList.contains('locked')) tabs[1].textContent=T('ch2');
+  // カードを英語名/説明に
+  const cards=document.querySelectorAll('#stage-grid .stage-card');
+  const ids = (typeof SELECTED_CHAPTER!=='undefined' && SELECTED_CHAPTER===2)
+    ? [11,12,13,14,15,16,17,18,19,20] : [1,2,3,4,5,6,7,8,9,10];
+  cards.forEach((card,i)=>{
+    const s=STAGES[ids[i]]; if(!s) return;
+    const t=card.querySelector('.sc-title'), d=card.querySelector('.sc-desc');
+    if(t && t.textContent!=='???' && s.nameEN) t.textContent=s.nameEN;
+    if(d && s.descEN && !card.classList.contains('locked')) d.textContent=s.descEN;
+  });
+};
+const _showBossBanner = showBossBanner;
+window.showBossBanner = function(e){
+  _showBossBanner(e);
+  if(isEN()){
+    const nm=document.getElementById('bb-name'); if(nm) nm.textContent=e.nameEN||e.nameJP;
+    const hn=document.getElementById('boss-hp-name'); if(hn) hn.textContent=e.nameEN||e.nameJP;
+    const lb=document.getElementById('bb-label'); if(lb) lb.textContent=e.reaper?'TIME THIEF':'APPEARS';
+    const ob=document.querySelector('#boss-banner .obj'); if(ob) ob.textContent='—— Slay it, or dawn will never come ——';
+  }
+};
+const _begin = begin;
+window.begin = function(id){
+  _begin(id);
+  const s=STAGES[id];
+  document.getElementById('stage-tag-hud').textContent='STAGE '+id+' '+(isEN()?(s.nameEN||s.nameJP):s.nameJP);
+};
+
+/* ============================================================
+   音楽(Web Audioで自動生成。ファイル不要・商用OK=自作音)
+   ★ 実際の楽曲に差し替えたいときは MUSIC.useFiles に
+     テーマ名→音声URL を入れてください(下にメモあり)。
+   テーマは2ステージごと + ボス/大ボス/最終手前/ラスボス/死神で変化。
+   ============================================================ */
+const MUSIC = {
+  ctx:null, master:null, timer:null, theme:null, muted:false, started:false,
+  useFiles:null,            // 例: { boss:'audio/boss.mp3', s1:'audio/a.mp3', ... }
+  audioEl:null, step:0,
+};
+// テーマ定義: root(基準周波数), scale(度数), bpm, wave, intensity(厚み)
+const THEMES = {
+  s1: {root:196.0, scale:[0,3,5,7,10], bpm:70,  wave:'sine',     intensity:1},
+  s2: {root:174.6, scale:[0,2,3,7,8],  bpm:74,  wave:'triangle', intensity:1},
+  s3: {root:164.8, scale:[0,2,3,5,7],  bpm:78,  wave:'sine',     intensity:1.1},
+  s4: {root:155.6, scale:[0,1,5,7,8],  bpm:82,  wave:'triangle', intensity:1.2},
+  s5: {root:146.8, scale:[0,3,5,6,10], bpm:86,  wave:'sawtooth', intensity:1.2},
+  boss:    {root:130.8, scale:[0,1,4,5,7],  bpm:104, wave:'sawtooth', intensity:1.6},
+  bigboss: {root:123.5, scale:[0,1,3,4,8],  bpm:116, wave:'sawtooth', intensity:1.9},
+  prefinal:{root:138.6, scale:[0,2,5,7,9],  bpm:72,  wave:'triangle', intensity:1.4},
+  final:   {root:110.0, scale:[0,1,4,6,7],  bpm:128, wave:'sawtooth', intensity:2.2},
+  reaper:  {root:103.8, scale:[0,1,2,6,7],  bpm:138, wave:'square',   intensity:2.4},
+};
+function semis(root,n){ return root*Math.pow(2, n/12); }
+
+function startAudioIfNeeded(){
+  if(MUSIC.started || MUSIC.muted) return;
+  try{
+    MUSIC.ctx = new (window.AudioContext||window.webkitAudioContext)();
+    MUSIC.master = MUSIC.ctx.createGain();
+    MUSIC.master.gain.value = 0.16;
+    MUSIC.master.connect(MUSIC.ctx.destination);
+    MUSIC.started = true;
+    if(MUSIC.theme) playTheme(MUSIC.theme, true);
+  }catch(e){ /* AudioContext不可 */ }
+}
+function playNote(freq, dur, when, type, gain){
+  const c=MUSIC.ctx; if(!c) return;
+  const o=c.createOscillator(), g=c.createGain();
+  o.type=type||'sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0, when);
+  g.gain.linearRampToValueAtTime(gain, when+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0008, when+dur);
+  o.connect(g); g.connect(MUSIC.master);
+  o.start(when); o.stop(when+dur+0.05);
+}
+function playTheme(name, force){
+  MUSIC.theme = name;
+  // 実ファイル使用モード
+  if(MUSIC.useFiles && MUSIC.useFiles[name]){
+    if(MUSIC.timer){ clearInterval(MUSIC.timer); MUSIC.timer=null; }
+    if(!MUSIC.audioEl){ MUSIC.audioEl=new Audio(); MUSIC.audioEl.loop=true; MUSIC.audioEl.volume=0.5; }
+    if(MUSIC.audioEl.src.indexOf(MUSIC.useFiles[name])<0 || force){
+      MUSIC.audioEl.src=MUSIC.useFiles[name]; MUSIC.audioEl.play().catch(()=>{});
+    }
+    return;
+  }
+  if(!MUSIC.started) return;
+  if(MUSIC.timer) clearInterval(MUSIC.timer);
+  const th=THEMES[name]||THEMES.s1;
+  const beat = 60/th.bpm; // 秒
+  MUSIC.step=0;
+  MUSIC.timer = setInterval(()=>{
+    if(MUSIC.muted || !MUSIC.ctx) return;
+    const c=MUSIC.ctx, now=c.currentTime+0.02, s=MUSIC.step;
+    // ドローン(2拍ごと)
+    if(s%2===0){
+      playNote(semis(th.root,0)/2, beat*2.2, now, 'sine', 0.05*th.intensity);
+      playNote(semis(th.root,7)/2, beat*2.2, now, 'sine', 0.035*th.intensity);
+    }
+    // アルペジオ
+    const deg=th.scale[(s*3)%th.scale.length];
+    const oct=(s%4<2)?0:12;
+    playNote(semis(th.root, deg+oct), beat*0.9, now, th.wave, 0.06*th.intensity);
+    // 高強度テーマはアクセント
+    if(th.intensity>1.5 && s%4===2){
+      playNote(semis(th.root, th.scale[2]+12), beat*0.5, now, 'square', 0.04);
+    }
+    MUSIC.step++;
+  }, beat*500); // 半拍ごとにスケジュール
+}
+function desiredTheme(){
+  if(!STATE.running) return MUSIC.theme||'s1';
+  const st=STATE.stage, id=STATE.stageId;
+  if(STATE.bossRef && STATE.bossRef.reaper) return 'reaper';
+  if(id===20) return 'final';
+  if(STATE.bossRef && st && st.isBigBoss) return 'bigboss';
+  if(STATE.bossRef) return 'boss';
+  if(id===19) return 'prefinal';
+  // 2ステージごと
+  const pair = Math.floor(((id||1)-1)/2)%5; // s1..s5を循環
+  return ['s1','s2','s3','s4','s5'][pair];
+}
+function musicTick(){
+  const want = desiredTheme();
+  if(want !== MUSIC.theme){ playTheme(want); }
+}
+// ミュートボタン(左下)
+function makeMuteToggle(){
+  if(document.getElementById('mute-toggle')) return;
+  const b=document.createElement('div');
+  b.id='mute-toggle';
+  b.textContent='🔊';
+  b.style.cssText='position:absolute;left:.8rem;bottom:calc(1rem + env(safe-area-inset-bottom));z-index:13;'
+    +'width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;'
+    +'border:1px solid rgba(216,209,188,.4);background:rgba(8,9,13,.7);border-radius:50%;cursor:pointer;color:#d8d1bc;';
+  b.onclick=(ev)=>{ ev.stopPropagation();
+    MUSIC.muted=!MUSIC.muted; b.textContent=MUSIC.muted?'🔇':'🔊';
+    if(MUSIC.muted){ if(MUSIC.audioEl) MUSIC.audioEl.pause(); }
+    else { startAudioIfNeeded(); if(MUSIC.audioEl) MUSIC.audioEl.play().catch(()=>{}); }
+  };
+  document.getElementById('game').appendChild(b);
+}
+// 最初のユーザー操作で音を開始(ブラウザの自動再生制限対策)
+function armAudio(){
+  const go=()=>{ startAudioIfNeeded(); window.removeEventListener('touchstart',go); window.removeEventListener('mousedown',go); window.removeEventListener('keydown',go); };
+  window.addEventListener('touchstart',go,{passive:true});
+  window.addEventListener('mousedown',go);
+  window.addEventListener('keydown',go);
+}
+
+/* ---------- 自前のメインループ(毎フレームの追加処理) ---------- */
+function patchLoop(){
+  updateWardMotion();
+  musicTick();
+  requestAnimationFrame(patchLoop);
+}
+
+/* ---------- 初期化 ---------- */
+function init(){
+  makeLangToggle();
+  makeMuteToggle();
+  applyStaticLang();
+  hookDawnNext();
+  armAudio();
+  // タイトルへ戻った時などに再フック(toTitleがボタンを差し替え直す場合に備える)
+  const _toTitle = toTitle;
+  window.toTitle = function(){ _toTitle(); makeLangToggle(); applyStaticLang(); hookDawnNext(); };
+  // dawnの「もう一度」「選択へ」は元のままでOK。nextだけ上書き済み。
+  requestAnimationFrame(patchLoop);
+}
+if(document.readyState==='complete' || document.readyState==='interactive') init();
+else window.addEventListener('DOMContentLoaded', init);
+
+})();
+
+</script>
+
 </body>
 </html>
